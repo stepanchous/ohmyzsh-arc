@@ -37,7 +37,7 @@ function _arc_chpwd() {
   # Slow path: walk up to find .arc directory (only runs when entering arcadia)
   local dir="$PWD"
   while [[ "$dir" != "/" ]]; do
-    if [[ -d "$dir/.arc" ]]; then
+    if [[ -f "$dir/.arc/HEAD" ]]; then
       _ARC_ROOT_CACHE="$dir"
       _ARC_HEAD_FILE_CACHE="$dir/.arc/HEAD"
       _arc_render_prompt
