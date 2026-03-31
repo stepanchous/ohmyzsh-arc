@@ -2,28 +2,39 @@
 # arc is an internal Yandex VCS tool (similar to git)
 
 function _omz_arc_prompt_info() {
-  # Get branch and status in one arc call.
-  # arc status -b -s outputs:
-  #   "## branch...remote/branch" on first line (with -b)
-  #   followed by short status lines for dirty files (with -s)
-  # Returns non-zero exit code when not in an arc repo.
-  local status_output
-  status_output=$(command arc status -b -s 2>/dev/null) || return 0
-  [[ -z "$status_output" ]] && return 0
+  # Walk up from $PWD to find the .arc directory (no process spawn)
+  local dir="$PWD"
+  local arc_dir=""
+  while [[ "$dir" != "/" ]]; do
+    if [[ -d "$dir/.arc" ]]; then
+      arc_dir="$dir/.arc"
+      break
+    fi
+    dir="${dir:h}"
+  done
+  [[ -z "$arc_dir" ]] && return 0
 
-  # First line must start with "## " (branch tracking line)
-  local first_line="${status_output%%$'\n'*}"
-  [[ "$first_line" == \#\#* ]] || return 0
+  # Read branch directly from .arc/HEAD (no process spawn)
+  # Format: Symbolic: "branch_name"
+  local head_file="$arc_dir/HEAD"
+  [[ -f "$head_file" ]] || return 0
 
-  # Extract branch name: strip "## " prefix, then "...remote" suffix
-  local ref="${first_line#\#\# }"
-  ref="${ref%%...*}"
+  local raw_head
+  raw_head=$(< "$head_file")
+  [[ "$raw_head" == Symbolic:* ]] || return 0
+
+  local ref="${raw_head#Symbolic: \"}"
+  ref="${ref%\"}"
   [[ -z "$ref" ]] && return 0
 
-  # Dirty if there are additional lines after the branch line
+  # Dirty status: opt-in only (arc status is slow — set ARC_PROMPT_SHOW_DIRTY=1 to enable)
   local dirty
-  if [[ "$status_output" == *$'\n'* ]]; then
-    dirty="$ZSH_THEME_ARC_PROMPT_DIRTY"
+  if [[ "${ARC_PROMPT_SHOW_DIRTY:-0}" == "1" ]]; then
+    if [[ -n "$(command arc status --short 2>/dev/null | grep -v '^## ')" ]]; then
+      dirty="$ZSH_THEME_ARC_PROMPT_DIRTY"
+    else
+      dirty="$ZSH_THEME_ARC_PROMPT_CLEAN"
+    fi
   else
     dirty="$ZSH_THEME_ARC_PROMPT_CLEAN"
   fi
